@@ -94,6 +94,27 @@ services:
       - ./backend/product_service/app:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+  order_service:
+    build:
+      context: ./backend/order_service
+      dockerfile: Dockerfile
+    image: order_service:latest
+    container_name: order_api_container
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      POSTGRES_HOST: order_db
+      CUSTOMER_SERVICE_URL: http://customer_service:8002
+    depends_on:
+      order_db:
+        condition: service_healthy
+      product_service:
+        condition: service_started
+    volumes:
+      - ./backend/order_service/app:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
   customer_service:
     build:
       context: ./backend/customer_service
@@ -117,27 +138,6 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/customer_service/app:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-  order_service:
-    build:
-      context: ./backend/order_service
-      dockerfile: Dockerfile
-    image: order_service:latest
-    container_name: order_api_container
-    restart: unless-stopped
-    ports:
-      - "8001:8000"
-    environment:
-      POSTGRES_HOST: order_db
-      CUSTOMER_SERVICE_URL: http://product_service:8002
-    depends_on:
-      order_db:
-        condition: service_healthy
-      product_service:
-        condition: service_started
-    volumes:
-      - ./backend/order_service/app:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   frontend:
