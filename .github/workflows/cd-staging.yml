@@ -16,12 +16,12 @@ env:
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_STAGING_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
   AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-  STAGING_LOCATION: 'australiaeast'
-  DEPLOYMENT_NAME: 'staging-deployment'
-  PRODUCT_PORT: 8000
-  ORDER_PORT: 8001
-  CUSTOMER_PORT: 8002
-  FRONTEND_PORT: 80
+  PRODUCT_API_URL: ${{ steps.deploy_to_staging.outputs.product_api_url }}
+  ORDER_API_URL: ${{ steps.deploy_to_staging.outputs.order_api_url }}
+  CUSTOMER_API_URL: ${{ steps.deploy_to_staging.outputs.customer_api_url }}
+  RESOURCE_GROUP_NAME : deakinuni
+  AKS_NAME : 224917579
+
 
 jobs:
   deploy_to_staging:
@@ -39,45 +39,73 @@ jobs:
         run: |
           az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
 
-      # - name: Deploy using docker-compose.yml
-      #   run: |
-      #     az container create --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --file staging-deployment.yml --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} --registry-username ${{ secrets.ACR_USERNAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --name ${{ env.DEPLOYMENT_NAME }} 
-
-      - name: Deploy to Azure Container Instances
-        id: deploy
+      - name: Set AKS credentials
         run: |
-          # Retrieve the username and password from the Azure credentials JSON
-          registry_username=$(echo '${{ env.AZURE_CREDENTIALS }}' | jq -r .clientId)
-          registry_password=$(echo '${{ env.AZURE_CREDENTIALS }}' | jq -r .clientSecret)
+          az aks get-credentials --name ${{ env.AKS_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}
 
-          az container create \
-            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
-            --name ${{ env.DEPLOYMENT_NAME }} \
-            --file ./docker-compose.yml \
-            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
-            --registry-username $registry_username \
-            --registry-password $registry_password \
-            --ip-address Public \
-            --ports ${{ env.FRONTEND_PORT }}
-
-      - name: Get public IP address
-        id: get-ip
+      - name: Create staging namespace
         run: |
-          public_ip=$(az container show \
-            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
-            --name ${{ env.DEPLOYMENT_NAME }} \
-            --query ipAddress.ip \
-            --output tsv)
-          echo "Public IP of staging environment: $public_ip"
-          echo "STAGING_IP_ADDRESS=$public_ip" >> $GITHUB_ENV
+          kubectl create namespace staging || echo "Staging namespace already exists"
+
+      - name: Deploy product_service to Staging namespace
+        id: product_service
+        run: |
+          kubectl apply -f ./kubernetes/product_service_deployment.yaml -n staging
+          echo "::set-output name=product_api_url::$(kubectl get svc product-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+
+      - name: Deploy order_service to Staging namespace
+        id: order_service
+        run: |
+          kubectl apply -f ./kubernetes/order_service_deployment.yaml -n staging
+          echo "::set-output name=order_api_url::$(kubectl get svc order-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+
+      - name: Deploy customer_service to Staging namespace
+        id: customer_service
+        run: |
+          kubectl apply -f ./kubernetes/customer_service_deployment.yaml -n staging
+          echo "::set-output name=customer_api_url::$(kubectl get svc customer-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+
+      - name: Deploy frontend with injected API URLs
+        run: |
+          # Replace the placeholders in main.js with actual API URLs
+          sed -i "s|PRODUCT_API_BASE_URL = '';|PRODUCT_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.product_api_url }}';|g" ./frontend/main.js
+          sed -i "s|ORDER_API_BASE_URL = '';|ORDER_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.order_api_url }}';|g" ./frontend/main.js
+          sed -i "s|CUSTOMER_API_BASE_URL = '';|CUSTOMER_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.customer_api_url }}';|g" ./frontend/main.js
+
+          # Build and push the frontend Docker image
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest ./frontend
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest
+
+      - name: Deploy frontend to Staging namespace
+        run: |
+          kubectl apply -f ./kubernetes/frontend_deployment.yaml -n staging
+
+      - name: Get frontend external IP
+        id: get_frontend_ip
+        run: |
+          FRONTEND_IP=$(kubectl get svc frontend-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Frontend service is available at: $FRONTEND_IP"
+          echo "::set-output name=frontend_ip::$FRONTEND_IP"
+
+      - name: Display Frontend IP
+        run: |
+          echo "Frontend service is now available at: ${{ steps.get_frontend_ip.outputs.frontend_ip }}"
 
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |
           echo "Staging environment is ready at http://${{ env.STAGING_IP_ADDRESS }}. You have 5 minutes to perform manual tests."
           sleep 300 # Wait for 5 minutes
 
-      - name: Destroy staging environment
-        if: always()
+  destroy_staging:
+    runs-on: ubuntu-latest
+    needs: deploy_frontend
+    if: success()
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete staging namespace
         run: |
-          az group delete --name ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --yes --no-wait
-          echo "Staging resource group '${{ env.AZURE_STAGING_RESOURCE_GROUP }}' is being deleted."
+          kubectl delete namespace staging
