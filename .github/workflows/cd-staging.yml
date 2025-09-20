@@ -60,8 +60,8 @@ jobs:
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ip-address Public \
-            --ports 8000 \ 
-            --os-type Linux
+            --ports ${{ env.PRODUCT_PORT }} \ 
+            --os-type Linux --cpu 1 --memory 1
 
       - name: Get product_service IP
         run: |
@@ -82,8 +82,8 @@ jobs:
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ip-address Public \
-            --ports 8001 \
-            --os-type Linux
+            --ports ${{ env.ORDER_PORT }} \
+            --os-type Linux --cpu 1 --memory 1
 
       - name: Get order_service IP
         run: |
@@ -104,8 +104,8 @@ jobs:
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \            
             --ip-address Public \
-            --ports 8002 \
-            --os-type Linux
+            --ports ${{ env.CUSTOMER_PORT }} \
+            --os-type Linux --cpu 1 --memory 1
 
       - name: Get customer_service IP
         run: |
@@ -143,8 +143,8 @@ jobs:
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \\
             --ip-address Public \
-            --ports 80 \
-            --os-type Linux
+            --ports ${{ env.FRONTEND_PORT }} \
+            --os-type Linux --cpu 1 --memory 1
 
       - name: Get frontend IP
         run: |
