@@ -118,7 +118,7 @@ jobs:
 
       - name: Deploy frontend to Staging namespace
         run: |
-          kubectl apply -f ./k8s/frontend_deployment.yaml -n staging
+          kubectl apply -f ./k8s/frontend.yaml -n staging
 
       - name: Get frontend external IP
         id: get_frontend_ip
