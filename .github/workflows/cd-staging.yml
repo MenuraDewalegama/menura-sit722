@@ -134,7 +134,7 @@ jobs:
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |
           echo "Staging environment is ready at http://${{ steps.get_frontend_ip.outputs.frontend_ip }}. You have 5 minutes to perform manual tests."
-          sleep 300 # Wait for 5 minutes
+          sleep 60 # Wait for 1 minutes
 
   destroy_staging:
     runs-on: ubuntu-latest
@@ -145,6 +145,10 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS credentials
+        run: |
+          az aks get-credentials --name ${{ env.AKS_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}
 
       - name: Delete staging namespace
         run: |
