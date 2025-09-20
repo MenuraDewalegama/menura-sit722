@@ -4,28 +4,23 @@ on:
   push:
     branches:
       - 'testing'
-  # workflow_call:
-  # workflow_run:
-  #   workflows: ["CI Pipeline - Test, Build and Push Images to ACR"]
-  #   types:
-  #     - completed
-  
 
 env:
   AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_STAGING_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
   AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-  PRODUCT_API_URL: ${{ steps.deploy_to_staging.outputs.product_api_url }}
-  ORDER_API_URL: ${{ steps.deploy_to_staging.outputs.order_api_url }}
-  CUSTOMER_API_URL: ${{ steps.deploy_to_staging.outputs.customer_api_url }}
   RESOURCE_GROUP_NAME : deakinuni
   AKS_NAME : 224917579
-
 
 jobs:
   deploy_to_staging:
     runs-on: ubuntu-latest
+    outputs:
+      product_api_url: ${{ steps.deploy_product_service.outputs.product_api_url }}
+      order_api_url: ${{ steps.deploy_order_service.outputs.order_api_url }}
+      customer_api_url: ${{ steps.deploy_customer_service.outputs.customer_api_url }}
+      frontend_ip: ${{ steps.get_frontend_ip.outputs.frontend_ip }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -48,29 +43,32 @@ jobs:
           kubectl create namespace staging || echo "Staging namespace already exists"
 
       - name: Deploy product_service to Staging namespace
-        id: product_service
+        id: deploy_product_service
         run: |
           kubectl apply -f ./kubernetes/product_service_deployment.yaml -n staging
-          echo "::set-output name=product_api_url::$(kubectl get svc product-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          product_ip=$(kubectl get svc product-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "::set-output name=product_api_url::$product_ip"
 
       - name: Deploy order_service to Staging namespace
-        id: order_service
+        id: deploy_order_service
         run: |
           kubectl apply -f ./kubernetes/order_service_deployment.yaml -n staging
-          echo "::set-output name=order_api_url::$(kubectl get svc order-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          order_ip=$(kubectl get svc order-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "::set-output name=order_api_url::$order_ip"
 
       - name: Deploy customer_service to Staging namespace
-        id: customer_service
+        id: deploy_customer_service
         run: |
           kubectl apply -f ./kubernetes/customer_service_deployment.yaml -n staging
-          echo "::set-output name=customer_api_url::$(kubectl get svc customer-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          customer_ip=$(kubectl get svc customer-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "::set-output name=customer_api_url::$customer_ip"
 
       - name: Deploy frontend with injected API URLs
         run: |
           # Replace the placeholders in main.js with actual API URLs
-          sed -i "s|PRODUCT_API_BASE_URL = '';|PRODUCT_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.product_api_url }}';|g" ./frontend/main.js
-          sed -i "s|ORDER_API_BASE_URL = '';|ORDER_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.order_api_url }}';|g" ./frontend/main.js
-          sed -i "s|CUSTOMER_API_BASE_URL = '';|CUSTOMER_API_BASE_URL = '${{ steps.deploy_to_staging.outputs.customer_api_url }}';|g" ./frontend/main.js
+          sed -i "s|PRODUCT_API_BASE_URL = '';|PRODUCT_API_BASE_URL = '${{ steps.deploy_product_service.outputs.product_api_url }}';|g" ./frontend/main.js
+          sed -i "s|ORDER_API_BASE_URL = '';|ORDER_API_BASE_URL = '${{ steps.deploy_order_service.outputs.order_api_url }}';|g" ./frontend/main.js
+          sed -i "s|CUSTOMER_API_BASE_URL = '';|CUSTOMER_API_BASE_URL = '${{ steps.deploy_customer_service.outputs.customer_api_url }}';|g" ./frontend/main.js
 
           # Build and push the frontend Docker image
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest ./frontend
@@ -93,12 +91,12 @@ jobs:
 
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |
-          echo "Staging environment is ready at http://${{ env.STAGING_IP_ADDRESS }}. You have 5 minutes to perform manual tests."
+          echo "Staging environment is ready at http://${{ steps.get_frontend_ip.outputs.frontend_ip }}. You have 5 minutes to perform manual tests."
           sleep 300 # Wait for 5 minutes
 
   destroy_staging:
     runs-on: ubuntu-latest
-    needs: deploy_frontend
+    needs: deploy_to_staging
     if: success()
     steps:
       - name: Azure Login

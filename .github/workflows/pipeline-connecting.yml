@@ -6,10 +6,10 @@
 #       - 'testing'
 
 # jobs:
-#   # ci-pipeline:
-#   #   name: Run CI Pipeline
-#   #   uses: ./.github/workflows/ci-pipeline.yml
-#   #   secrets: inherit
+#   ci-pipeline:
+#     name: Run CI Pipeline
+#     uses: ./.github/workflows/ci-pipeline.yml
+#     secrets: inherit
 
 #   deploy_backend:
 #     name: Run CD Staging Pipeline
