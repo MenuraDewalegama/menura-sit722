@@ -1,6 +1,7 @@
 name: CD Pipeline - Staging and Cleanup
 
 on:
+  workflow_call:
   push:
     branches:
       - 'testing'
