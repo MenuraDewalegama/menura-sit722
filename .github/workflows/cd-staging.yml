@@ -39,9 +39,36 @@ jobs:
         run: |
           az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
 
-      - name: Deploy using docker-compose.yml
+      # - name: Deploy using docker-compose.yml
+      #   run: |
+      #     az container create --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --file staging-deployment.yml --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} --registry-username ${{ secrets.ACR_USERNAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --name ${{ env.DEPLOYMENT_NAME }} 
+
+      - name: Deploy to Azure Container Instances
+        id: deploy
         run: |
-          az container create --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --file staging-deployment.yml --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} --registry-username ${{ secrets.ACR_USERNAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --name ${{ env.DEPLOYMENT_NAME }} 
+          # Retrieve the username and password from the Azure credentials JSON
+          registry_username=$(echo '${{ env.AZURE_CREDENTIALS }}' | jq -r .clientId)
+          registry_password=$(echo '${{ env.AZURE_CREDENTIALS }}' | jq -r .clientSecret)
+
+          az container create \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name ${{ env.DEPLOYMENT_NAME }} \
+            --file ./docker-compose.yml \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --registry-username $registry_username \
+            --registry-password $registry_password \
+            --ip-address Public 
+
+      - name: Get public IP address
+        id: get-ip
+        run: |
+          public_ip=$(az container show \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name ${{ env.DEPLOYMENT_NAME }} \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "Public IP of staging environment: $public_ip"
+          echo "STAGING_IP_ADDRESS=$public_ip" >> $GITHUB_ENV
 
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |
