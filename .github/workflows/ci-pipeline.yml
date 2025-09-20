@@ -136,3 +136,9 @@ jobs:
         run: |
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest ./backend/customer_service
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest
+
+      - name: Trigger CD Pipeline
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          event-type: acr-image-push

@@ -1,0 +1,63 @@
+name: CD Pipeline - Staging and Cleanup
+
+on:
+  repository_dispatch:
+    types: [acr-image-push]
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_STAGING_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+  STAGING_LOCATION: 'australiaeast'
+  DEPLOYMENT_NAME: 'staging-deployment'
+  FRONTEND_PORT: 80
+
+jobs:
+  deploy_to_staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
+      - name: Azure Login for ACR
+        run: |
+          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+      - name: Deploy to Azure Container Instances
+        id: deploy
+        run: |
+          az container create \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name ${{ env.DEPLOYMENT_NAME }} \
+            --file ./docker-compose.yml \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --ip-address Public \
+            --ports ${{ env.FRONTEND_PORT }}
+
+      - name: Get public IP address
+        id: get-ip
+        run: |
+          public_ip=$(az container show \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name ${{ env.DEPLOYMENT_NAME }} \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "Public IP of staging environment: $public_ip"
+          echo "STAGING_IP_ADDRESS=$public_ip" >> $GITHUB_ENV
+
+      - name: Wait for manual acceptance testing (e.g., 5 minutes)
+        run: |
+          echo "Staging environment is ready at http://${{ env.STAGING_IP_ADDRESS }}. You have 5 minutes to perform manual tests."
+          sleep 300 # Wait for 5 minutes
+
+      - name: Destroy staging environment
+        if: always()
+        run: |
+          az group delete --name ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --yes --no-wait
+          echo "Staging resource group '${{ env.AZURE_STAGING_RESOURCE_GROUP }}' is being deleted."
