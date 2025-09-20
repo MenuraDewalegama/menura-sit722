@@ -18,7 +18,7 @@ env:
   AKS_NAME : 224917579
 
 jobs:
-  deploy_to_staging:
+  deploy_to_production:
     runs-on: ubuntu-latest
     outputs:
       product_api_url: ${{ steps.deploy_product_service.outputs.product_api_url }}
