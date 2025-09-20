@@ -83,9 +83,9 @@ services:
       - "8000:8000"
     environment:
       POSTGRES_HOST: product_db
-      AZURE_STORAGE_ACCOUNT_NAME: <your_storage_account_name>
-      AZURE_STORAGE_ACCOUNT_KEY: <your_storage_account_key>
-      AZURE_STORAGE_CONTAINER_NAME: <your_container_name>
+      AZURE_STORAGE_ACCOUNT_NAME: 224917579
+      AZURE_STORAGE_ACCOUNT_KEY: ee3jsxNU8hwNBte1zkqKOoallp3KNWpVeiZdKugEs2ttUY1BysWWORcBK/PFvX+abGzdOYxOPb0h+AStBwgsMQ==
+      AZURE_STORAGE_CONTAINER_NAME: week10
       AZURE_SAS_TOKEN_EXPIRY_HOURS: 24
     depends_on:
       product_db:
@@ -105,7 +105,7 @@ services:
       - "8001:8000"
     environment:
       POSTGRES_HOST: order_db
-      PRODUCT_SERVICE_URL: http://product_service:8000
+      CUSTOMER_SERVICE_URL: http://customer_service:8002
     depends_on:
       order_db:
         condition: service_healthy
@@ -144,7 +144,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: 224917579acr.azurecr.io/week05_example01_frontend:latest
+    image: frontend:latest
     container_name: product_order_frontend
     restart: always
     ports:

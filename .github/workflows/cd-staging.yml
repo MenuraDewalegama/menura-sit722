@@ -1,0 +1,156 @@
+name: CD Pipeline - Staging and Cleanup
+
+on:
+  workflow_call:
+  push:
+    branches:
+      - 'testing'
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_STAGING_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+  RESOURCE_GROUP_NAME : deakinuni
+  AKS_NAME : 224917579
+
+jobs:
+  deploy_to_staging:
+    runs-on: ubuntu-latest
+    outputs:
+      product_api_url: ${{ steps.deploy_product_service.outputs.product_api_url }}
+      order_api_url: ${{ steps.deploy_order_service.outputs.order_api_url }}
+      customer_api_url: ${{ steps.deploy_customer_service.outputs.customer_api_url }}
+      frontend_ip: ${{ steps.get_frontend_ip.outputs.frontend_ip }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
+      - name: Azure Login for ACR
+        run: |
+          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+      - name: Set AKS credentials
+        run: |
+          az aks get-credentials --name ${{ env.AKS_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}
+
+      - name: Create staging namespace
+        run: |
+          kubectl create namespace staging || echo "Staging namespace already exists"
+
+      - name: Deploy Backend Infrastructure (Namespace, ConfigMaps, Secrets, Databases)
+        run: |
+          echo "Deploying backend infrastructure..."
+          cd k8s/
+          kubectl apply -f configmaps.yaml -n staging
+          kubectl apply -f secrets.yaml -n staging
+          kubectl apply -f product-db.yaml -n staging
+          kubectl apply -f order-db.yaml -n staging
+
+      - name: Deploy Backend Microservices 
+        run: |
+          echo "Deploying backend microservices..."
+          cd k8s/
+          kubectl apply -f product-service.yaml -n staging
+          kubectl apply -f order-service.yaml -n staging
+          kubectl apply -f customer-service.yaml -n staging
+
+      - name: Wait for Backend LoadBalancer IPs
+        id: get_backend_ip
+        run: |
+          echo "Waiting for Product, Order LoadBalancer IPs to be assigned (up to 5 minutes)..."
+          PRODUCT_IP=""
+          ORDER_IP=""
+          CUSTOMER_IP=""
+
+          for i in $(seq 1 60); do
+            echo "Attempt $i/60 to get IPs..."
+            PRODUCT_IP=$(kubectl get service product-service-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            ORDER_IP=$(kubectl get service order-service-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            CUSTOMER_IP=$(kubectl get service customer-service-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" && -n "$CUSTOMER_IP" ]]; then
+              echo "All backend LoadBalancer IPs assigned!"
+              echo "Product Service IP: $PRODUCT_IP"
+              echo "Order Service IP: $ORDER_IP"
+              echo "Order Service IP: $CUSTOMER_IP"
+              break
+            fi
+            sleep 5 # Wait 5 seconds before next attempt
+          done
+          
+          if [[ -z "$PRODUCT_IP" || -z "$ORDER_IP" || -z "$CUSTOMER_IP" ]]; then
+            echo "Error: One or more LoadBalancer IPs not assigned after timeout."
+            exit 1 # Fail the job if IPs are not obtained
+          fi
+          
+          # These are environment variables for subsequent steps in the *same job*
+          # And used to set the job outputs
+          echo "PRODUCT_IP=$PRODUCT_IP" >> $GITHUB_ENV
+          echo "ORDER_IP=$ORDER_IP" >> $GITHUB_ENV
+          echo "CUSTOMER_IP=$CUSTOMER_IP" >> $GITHUB_ENV
+          echo "::set-output name=product_api_ip::$PRODUCT_IP"
+          echo "::set-output name=order_api_ip::$ORDER_IP"
+          echo "::set-output name=customer_api_ip::$CUSTOMER_IP"
+
+
+      - name: Inject Backend IPs into Frontend main.js
+        run: |
+          echo "Injecting IPs into frontend/static/js/main.js"
+          # Ensure frontend/main.js is directly in the path for sed
+          sed -i "s|PRODUCT_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.product_api_ip }}|g" frontend/main.js
+          sed -i "s|ORDER_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.order_api_ip }}|g" frontend/main.js
+          sed -i "s|CUSTOMER_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.customer_api_ip }}|g" frontend/main.js
+
+          # Display the modified file content for debugging
+          echo "--- Modified main.js content ---"
+          cat frontend/main.js
+          echo "---------------------------------"
+
+      - name: Build Frontend image
+        run: |
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest ./frontend
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest
+
+      - name: Deploy frontend to Staging namespace
+        run: |
+          kubectl apply -f ./k8s/frontend.yaml -n staging
+
+      - name: Get frontend external IP
+        id: get_frontend_ip
+        run: |
+          FRONTEND_IP=$(kubectl get svc frontend-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Frontend service is available at: $FRONTEND_IP"
+          echo "::set-output name=frontend_ip::$FRONTEND_IP"
+
+      - name: Display Frontend IP
+        run: |
+          echo "Frontend service is now available at: ${{ steps.get_frontend_ip.outputs.frontend_ip }}"
+
+      - name: Wait for manual acceptance testing (e.g., 5 minutes)
+        run: |
+          echo "Staging environment is ready at http://${{ steps.get_frontend_ip.outputs.frontend_ip }}. You have 5 minutes to perform manual tests."
+          sleep 60 # Wait for 1 minutes
+
+  destroy_staging:
+    runs-on: ubuntu-latest
+    needs: deploy_to_staging
+    if: success()
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS credentials
+        run: |
+          az aks get-credentials --name ${{ env.AKS_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}
+
+      - name: Delete staging namespace
+        run: |
+          kubectl delete namespace staging
