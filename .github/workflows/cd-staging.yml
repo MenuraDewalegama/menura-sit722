@@ -1,8 +1,6 @@
 name: CD Pipeline - Staging and Cleanup
 
 on:
-  push:
-    branches: [ testing ]
   repository_dispatch:
     types: [acr-image-push]
 
