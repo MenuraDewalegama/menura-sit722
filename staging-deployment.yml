@@ -1,6 +1,6 @@
 # staging-deployment.yml
 location: australiaeast
-name: ${{ env.DEPLOYMENT_NAME }}  # Name for the container group
+name: staging-deployment 
 type: Microsoft.ContainerInstance/containerGroups
 properties:
   containers:
