@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  product_service:
+    image: 224917579.azurecr.io/product_service:latest
+    ports:
+      - 8001:8001
+  order_service:
+    image: 224917579.azurecr.io/order_service:latest
+    ports:
+      - 8002:8002
+  customer_service:
+    image: 224917579.azurecr.io/customer_service:latest
+    ports:
+      - 8003:8003
+  frontend:
+    image: 224917579.azurecr.io/frontend:latest
+    ports:
+      - 80:80
+    environment:
+      PRODUCT_API_BASE_URL: http://localhost:8001
+      ORDER_API_BASE_URL: http://localhost:8002
+      CUSTOMER_API_BASE_URL: http://localhost:8003
