@@ -140,8 +140,14 @@ jobs:
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest ./backend/customer_service
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest
 
-      - name: Trigger CD Pipeline
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          event-type: acr-image-push
+      # - name: Trigger CD Pipeline
+      #   uses: peter-evans/repository-dispatch@v3
+      #   with:
+      #     token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      #     event-type: acr-image-push
+      - name: Trigger CD Pipeline via GitHub API
+        run: |
+          curl -X POST \
+          -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+          -d '{"event_type":"acr-image-push"}' \
+          https://api.github.com/repos/owner/repo/dispatches
