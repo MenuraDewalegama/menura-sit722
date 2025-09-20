@@ -43,26 +43,98 @@ jobs:
       #       --ip-address Public \
       #       --ports ${{ env.FRONTEND_PORT }}
 
-      - name: Deploy to Azure Container Instances
+      - name: Deploy product_service to Azure Container Instances
         run: |
           az container create \
             --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
-            --name ${{ env.DEPLOYMENT_NAME }} \
+            --name product-service-instance \
             --image ${{ env.AZURE_CONTAINER_REGISTRY }}/product_service:latest \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --ip-address Public \
+            --ports ${{ env.PRODUCT_PORT }}
+
+      - name: Get product_service IP
+        run: |
+          ip=$(az container show \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name product-service-instance \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "PRODUCT_API_IP=$ip" >> $GITHUB_ENV
+
+      - name: Deploy order_service to Azure Container Instances
+        run: |
+          az container create \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name order-service-instance \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}/order_service:latest \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --ip-address Public \
+            --ports ${{ env.ORDER_PORT }}
+
+      - name: Get order_service IP
+        run: |
+          ip=$(az container show \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name order-service-instance \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "ORDER_API_IP=$ip" >> $GITHUB_ENV
+
+      - name: Deploy customer_service to Azure Container Instances
+        run: |
+          az container create \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name customer-service-instance \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --ip-address Public \
+            --ports ${{ env.CUSTOMER_PORT }}
+
+      - name: Get customer_service IP
+        run: |
+          ip=$(az container show \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name customer-service-instance \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "CUSTOMER_API_IP=$ip" >> $GITHUB_ENV
+
+      - name: Inject Backend IPs into Frontend main.js
+        run: |
+          echo "Injecting IPs into frontend/static/js/main.js"
+
+          sed -i "s|PRODUCT_API_BASE_URL|http://${{ env.PRODUCT_API_IP }}|g" frontend/static/js/main.js
+          sed -i "s|ORDER_API_BASE_URL|http://${{ env.ORDER_API_IP }}|g" frontend/static/js/main.js
+          sed -i "s|CUSTOMER_API_BASE_URL|http://${{ env.CUSTOMER_API_IP }}|g" frontend/static/js/main.js
+
+          echo "--- Modified main.js content ---"
+          cat frontend/static/js/main.js
+          echo "---------------------------------"
+
+      - name: Build and push customer_service image
+        run: |
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest ./frontend
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest
+
+      - name: Deploy frontend to Azure Container Instances
+        run: |
+          az container create \
+            --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+            --name frontend-instance \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest \
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
             --ip-address Public \
             --ports ${{ env.FRONTEND_PORT }}
 
-      - name: Get public IP address
-        id: get-ip
+      - name: Get frontend IP
         run: |
-          public_ip=$(az container show \
+          ip=$(az container show \
             --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
-            --name ${{ env.DEPLOYMENT_NAME }} \
+            --name frontend-instance \
             --query ipAddress.ip \
             --output tsv)
-          echo "Public IP of staging environment: $public_ip"
-          echo "STAGING_IP_ADDRESS=$public_ip" >> $GITHUB_ENV
+          echo "FRONTEND_API_IP=$ip" >> $GITHUB_ENV
 
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |

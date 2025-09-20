@@ -144,7 +144,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: 224917579acr.azurecr.io/week05_example01_frontend:latest
+    image: frontend:latest
     container_name: product_order_frontend
     restart: always
     ports:
