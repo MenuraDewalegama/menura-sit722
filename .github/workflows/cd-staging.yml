@@ -32,13 +32,23 @@ jobs:
         run: |
           az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
 
+      # - name: Deploy to Azure Container Instances
+      #   id: deploy
+      #   run: |
+      #     az container create \
+      #       --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
+      #       --name ${{ env.DEPLOYMENT_NAME }} \
+      #       --file ./docker-compose.yml \
+      #       --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+      #       --ip-address Public \
+      #       --ports ${{ env.FRONTEND_PORT }}
+
       - name: Deploy to Azure Container Instances
-        id: deploy
         run: |
           az container create \
             --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
             --name ${{ env.DEPLOYMENT_NAME }} \
-            --file ./docker-compose.yml \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}/product_service:latest \
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
             --ip-address Public \
             --ports ${{ env.FRONTEND_PORT }}
