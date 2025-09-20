@@ -1,6 +1,7 @@
 name: CI Pipeline - Test, Build and Push Images to ACR
 
 on:
+  workflow_call:
   push:
     branches:
       - 'testing'
