@@ -57,7 +57,8 @@ jobs:
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
             --registry-username $registry_username \
             --registry-password $registry_password \
-            --ip-address Public 
+            --ip-address Public \
+            --ports ${{ env.FRONTEND_PORT }}
 
       - name: Get public IP address
         id: get-ip
