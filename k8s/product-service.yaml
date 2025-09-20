@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-service-w05-aks
+  name: product-service-aks
   labels:
     app: product-service
 spec:
@@ -24,62 +24,62 @@ spec:
         - containerPort: 8000
         env:
         - name: POSTGRES_HOST
-          value: product-db-service-w05-aks
+          value: product-db-service-aks
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-w05-aks
+              name: ecomm-config-aks
               key: PRODUCTS_DB_NAME
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: POSTGRES_PASSWORD
         - name: AZURE_STORAGE_ACCOUNT_NAME
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: AZURE_STORAGE_ACCOUNT_NAME
         - name: AZURE_STORAGE_ACCOUNT_KEY
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: AZURE_STORAGE_ACCOUNT_KEY
         - name: AZURE_STORAGE_CONTAINER_NAME
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-w05-aks
+              name: ecomm-config-aks
               key: AZURE_STORAGE_CONTAINER_NAME
         - name: AZURE_SAS_TOKEN_EXPIRY_HOURS
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-w05-aks
+              name: ecomm-config-aks
               key: AZURE_SAS_TOKEN_EXPIRY_HOURS
         - name: RABBITMQ_HOST
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-w05-aks
+              name: ecomm-config-aks
               key: RABBITMQ_HOST
         - name: RABBITMQ_USER
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: RABBITMQ_USER
         - name: RABBITMQ_PASS
           valueFrom:
             secretKeyRef:
-              name: ecomm-secrets-w05-aks
+              name: ecomm-secrets-aks
               key: RABBITMQ_PASS
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: product-service-w05-aks
+  name: product-service-aks
   labels:
     app: product-service
 spec:

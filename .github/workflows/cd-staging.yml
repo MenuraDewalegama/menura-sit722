@@ -42,35 +42,77 @@ jobs:
         run: |
           kubectl create namespace staging || echo "Staging namespace already exists"
 
-      - name: Deploy product_service to Staging namespace
-        id: deploy_product_service
+      - name: Deploy Backend Infrastructure (Namespace, ConfigMaps, Secrets, Databases)
         run: |
-          kubectl apply -f ./k8s/product_service_deployment.yaml -n staging
-          product_ip=$(kubectl get svc product-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "::set-output name=product_api_url::$product_ip"
+          echo "Deploying backend infrastructure..."
+          cd k8s/
+          kubectl apply -f configmaps.yaml -n staging
+          kubectl apply -f secrets.yaml -n staging
+          kubectl apply -f product-db.yaml -n staging
+          kubectl apply -f order-db.yaml -n staging
 
-      - name: Deploy order_service to Staging namespace
-        id: deploy_order_service
+      - name: Deploy Backend Microservices 
         run: |
-          kubectl apply -f ./k8s/order_service_deployment.yaml -n staging
-          order_ip=$(kubectl get svc order-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "::set-output name=order_api_url::$order_ip"
+          echo "Deploying backend microservices..."
+          cd k8s/
+          kubectl apply -f product-service.yaml -n staging
+          kubectl apply -f order-service.yaml -n staging
+          kubectl apply -f customer-service.yaml -n staging
 
-      - name: Deploy customer_service to Staging namespace
-        id: deploy_customer_service
+      - name: Wait for Backend LoadBalancer IPs
+        id: get_backend_ip
         run: |
-          kubectl apply -f ./k8s/customer_service_deployment.yaml -n staging
-          customer_ip=$(kubectl get svc customer-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "::set-output name=customer_api_url::$customer_ip"
+          echo "Waiting for Product, Order LoadBalancer IPs to be assigned (up to 5 minutes)..."
+          PRODUCT_IP=""
+          ORDER_IP=""
+          CUSTOMER_IP=""
 
-      - name: Deploy frontend with injected API URLs
+          for i in $(seq 1 60); do
+            echo "Attempt $i/60 to get IPs..."
+            PRODUCT_IP=$(kubectl get service product-service-aks -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            ORDER_IP=$(kubectl get service order-service-aks -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            CUSTOMER_IP=$(kubectl get service customer-service-aks -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" && -n "CUSTOMER_IP"]]; then
+              echo "All backend LoadBalancer IPs assigned!"
+              echo "Product Service IP: $PRODUCT_IP"
+              echo "Order Service IP: $ORDER_IP"
+              echo "Order Service IP: $CUSTOMER_IP"
+              break
+            fi
+            sleep 5 # Wait 5 seconds before next attempt
+          done
+          
+          if [[ -z "$PRODUCT_IP" || -z "$ORDER_IP" || -z "CUSTOMER_IP"]]; then
+            echo "Error: One or more LoadBalancer IPs not assigned after timeout."
+            exit 1 # Fail the job if IPs are not obtained
+          fi
+          
+          # These are environment variables for subsequent steps in the *same job*
+          # And used to set the job outputs
+          echo "PRODUCT_IP=$PRODUCT_IP" >> $GITHUB_ENV
+          echo "ORDER_IP=$ORDER_IP" >> $GITHUB_ENV
+          echo "CUSTOMER_IP=$CUSTOMER_IP" >> $GITHUB_ENV
+          echo "::set-output name=product_api_ip::$PRODUCT_IP"
+          echo "::set-output name=order_api_ip::$ORDER_IP"
+          echo "::set-output name=customer_api_ip::$CUSTOMER_IP"
+
+
+      - name: Inject Backend IPs into Frontend main.js
         run: |
-          # Replace the placeholders in main.js with actual API URLs
-          sed -i "s|PRODUCT_API_BASE_URL = '';|PRODUCT_API_BASE_URL = '${{ steps.deploy_product_service.outputs.product_api_url }}';|g" ./frontend/main.js
-          sed -i "s|ORDER_API_BASE_URL = '';|ORDER_API_BASE_URL = '${{ steps.deploy_order_service.outputs.order_api_url }}';|g" ./frontend/main.js
-          sed -i "s|CUSTOMER_API_BASE_URL = '';|CUSTOMER_API_BASE_URL = '${{ steps.deploy_customer_service.outputs.customer_api_url }}';|g" ./frontend/main.js
+          echo "Injecting IPs into frontend/static/js/main.js"
+          # Ensure frontend/main.js is directly in the path for sed
+          sed -i "s|PRODUCT_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.product_api_ip }}|g" frontend/main.js
+          sed -i "s|ORDER_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.order_api_ip }}|g" frontend/main.js
+          sed -i "s|CUSTOMER_API_BASE_URL|http://${{ steps.get_backend_ip.outputs.customer_api_ip }}|g" frontend/main.js
 
-          # Build and push the frontend Docker image
+          # Display the modified file content for debugging
+          echo "--- Modified main.js content ---"
+          cat frontend/main.js
+          echo "---------------------------------"
+
+      - name: Build Frontend image
+        run: |
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest ./frontend
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest
 
@@ -81,7 +123,7 @@ jobs:
       - name: Get frontend external IP
         id: get_frontend_ip
         run: |
-          FRONTEND_IP=$(kubectl get svc frontend-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          FRONTEND_IP=$(kubectl get svc frontend-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           echo "Frontend service is available at: $FRONTEND_IP"
           echo "::set-output name=frontend_ip::$FRONTEND_IP"
 
