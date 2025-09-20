@@ -1,8 +1,12 @@
 name: CD Pipeline - Staging and Cleanup
 
 on:
-  repository_dispatch:
-    types: [acr-image-push]
+  # repository_dispatch:
+  #   types: [acr-image-push]
+  workflow_run:
+    workflows: ["CI Pipeline - Test, Build and Push Images to ACR"]
+    types:
+      - completed
 
 env:
   AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
