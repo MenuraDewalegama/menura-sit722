@@ -45,21 +45,21 @@ jobs:
       - name: Deploy product_service to Staging namespace
         id: deploy_product_service
         run: |
-          kubectl apply -f ./kubernetes/product_service_deployment.yaml -n staging
+          kubectl apply -f ./k8s/product_service_deployment.yaml -n staging
           product_ip=$(kubectl get svc product-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           echo "::set-output name=product_api_url::$product_ip"
 
       - name: Deploy order_service to Staging namespace
         id: deploy_order_service
         run: |
-          kubectl apply -f ./kubernetes/order_service_deployment.yaml -n staging
+          kubectl apply -f ./k8s/order_service_deployment.yaml -n staging
           order_ip=$(kubectl get svc order-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           echo "::set-output name=order_api_url::$order_ip"
 
       - name: Deploy customer_service to Staging namespace
         id: deploy_customer_service
         run: |
-          kubectl apply -f ./kubernetes/customer_service_deployment.yaml -n staging
+          kubectl apply -f ./k8s/customer_service_deployment.yaml -n staging
           customer_ip=$(kubectl get svc customer-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           echo "::set-output name=customer_api_url::$customer_ip"
 
@@ -76,7 +76,7 @@ jobs:
 
       - name: Deploy frontend to Staging namespace
         run: |
-          kubectl apply -f ./kubernetes/frontend_deployment.yaml -n staging
+          kubectl apply -f ./k8s/frontend_deployment.yaml -n staging
 
       - name: Get frontend external IP
         id: get_frontend_ip
