@@ -1,18 +1,18 @@
-# name: Main CI/CD Pipeline
+name: Main CI/CD Pipeline
 
-# on:
-#   push:
-#     branches:
-#       - 'testing'
+on:
+  push:
+    branches:
+      - 'testing'
 
-# jobs:
-#   ci-pipeline:
-#     name: Run CI Pipeline
-#     uses: ./.github/workflows/ci-pipeline.yml
-#     secrets: inherit
+jobs:
+  ci-pipeline:
+    name: Run CI Pipeline
+    uses: ./.github/workflows/ci-pipeline.yml
+    secrets: inherit
 
-#   deploy_backend:
-#     name: Run CD Staging Pipeline
-#     needs: [ci-pipeline]
-#     uses: ./.github/workflows/cd-staging.yml
-#     secrets: inherit
+  deploy_backend:
+    name: Run CD Staging Pipeline
+    needs: [ci-pipeline]
+    uses: ./.github/workflows/cd-staging.yml
+    secrets: inherit
