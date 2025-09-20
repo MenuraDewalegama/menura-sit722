@@ -41,7 +41,7 @@ jobs:
 
       - name: Deploy using docker-compose.yml
         run: |
-          az container create --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --file staging-deployment.yml --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} --registry-username ${{ secrets.ACR_USERNAME }} --registry-password ${{ secrets.ACR_PASSWORD }}
+          az container create --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} --file staging-deployment.yml --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} --registry-username ${{ secrets.ACR_USERNAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --name staging
 
       - name: Wait for manual acceptance testing (e.g., 5 minutes)
         run: |
