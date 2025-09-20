@@ -57,6 +57,8 @@ jobs:
             --name product-service-instance \
             --image ${{ env.AZURE_CONTAINER_REGISTRY }}/product_service:latest \
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ip-address Public \
             --ports ${{ env.PRODUCT_PORT }}
 
@@ -76,6 +78,8 @@ jobs:
             --name order-service-instance \
             --image ${{ env.AZURE_CONTAINER_REGISTRY }}/order_service:latest \
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ip-address Public \
             --ports ${{ env.ORDER_PORT }}
 
@@ -95,6 +99,8 @@ jobs:
             --name customer-service-instance \
             --image ${{ env.AZURE_CONTAINER_REGISTRY }}/customer_service:latest \
             --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \            
             --ip-address Public \
             --ports ${{ env.CUSTOMER_PORT }}
 
@@ -130,7 +136,9 @@ jobs:
             --resource-group ${{ env.AZURE_STAGING_RESOURCE_GROUP }} \
             --name frontend-instance \
             --image ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:latest \
-            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }} \
+            --registry-login-server ${{ env.AZURE_CONTAINER_REGISTRY }}             
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \\
             --ip-address Public \
             --ports ${{ env.FRONTEND_PORT }}
 
